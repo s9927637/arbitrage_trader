@@ -5,8 +5,8 @@ FROM python:latest
 WORKDIR /app
 
 # 更新系統並安裝必要的庫
-RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 RUN python --version
+RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 
 # 複製 requirements.txt 並安裝依賴
 COPY requirements.txt .
