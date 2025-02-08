@@ -31,12 +31,16 @@ SPREADSHEET_ID = os.getenv("GOOGLE_SHEET_ID")  # 從環境變數中獲取 ID
 credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
 credentials_info = json.loads(credentials_json)
 credentials = Credentials.from_service_account_info(credentials_info)
+scopes = ['https://www.googleapis.com/auth/spreadsheets']
+
 
 # 授權並打開 Google Sheet
 gsheet = gspread.authorize(credentials).open_by_key(SPREADSHEET_ID).sheet1
 
 # 初始化 Google Sheets API 服務
 service = build('sheets', 'v4', credentials=credentials)
+
+
 
 # ✅ 交易參數
 TRADE_FEE = 0.00075
