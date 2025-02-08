@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# 升級 pip
+RUN pip install --upgrade pip
+
 # 複製所有檔案到容器內
 COPY . .
 
