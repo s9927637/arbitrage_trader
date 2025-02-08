@@ -203,4 +203,4 @@ def get_arbitrage_status():
         return jsonify({"status": "idle", "message": "套利機器人閒置"}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
