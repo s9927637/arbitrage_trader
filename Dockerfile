@@ -4,11 +4,12 @@ FROM python:latest
 # 設定工作目錄
 WORKDIR /app
 
-# 更新系統並安裝最新的 Python 和 Pip
+# 更新系統並安裝必要的庫
 RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 
-# 安裝 Binance SDK 和其他依賴
-RUN pip3 install --no-cache-dir requests binance pandas numpy
+# 複製 requirements.txt 並安裝依賴
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # 複製所有檔案到容器內
 COPY . .
