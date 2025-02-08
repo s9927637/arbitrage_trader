@@ -1,0 +1,8 @@
+python-binance
+numpy
+pandas
+keras
+tensorflow
+sklearn
+gspread
+oauth2client
