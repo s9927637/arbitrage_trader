@@ -17,7 +17,7 @@ from google.oauth2.service_account import Credentials
 from flask import Flask, jsonify
 import os
 from google.oauth2 import service_account
-from retrying import retry  # 用於重試機制
+from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
 
 # ✅ 設定日誌記錄
 logging.basicConfig(filename='arbitrage_bot.log', level=logging.INFO,
