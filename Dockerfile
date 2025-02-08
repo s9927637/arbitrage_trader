@@ -1,5 +1,5 @@
 # 使用最新的 Debian 作為基礎映像
-FROM debian:latest
+FROM python:latest
 
 # 設定工作目錄
 WORKDIR /app
@@ -18,3 +18,6 @@ RUN chmod +x binance_arbitrage_bot.py
 
 # 指定執行 Python 腳本
 CMD ["python3", "binance_arbitrage_bot.py"]
+
+# 開放 8080 端口
+EXPOSE 8080
