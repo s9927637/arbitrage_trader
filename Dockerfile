@@ -11,7 +11,7 @@ RUN pip install google-api-python-client
 # 複製 requirements.txt 並安裝依賴
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
-
+RUN pip install tenacity
 # 升級 pip
 RUN pip install --upgrade pip
 
