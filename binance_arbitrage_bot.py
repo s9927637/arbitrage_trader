@@ -1,6 +1,7 @@
 import numpy as np
 import time
 import gspread
+import threading
 from datetime import datetime
 from binance.client import Client
 from binance.enums import *
@@ -8,7 +9,11 @@ from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import LSTM
 from oauth2client.service_account import ServiceAccountCredentials
+from flask import Flask, jsonify
 import os
+
+# ✅ 初始化 Flask API
+app = Flask(__name__)
 
 # ✅ 設定 Binance API - 使用 Zeabur 環境變數
 API_KEY = os.getenv("BINANCE_API_KEY")
@@ -75,8 +80,7 @@ def select_best_arbitrage_path():
             volatility = calculate_volatility(symbol)
             volume = calculate_volume(symbol)
             
-            # 這裡可以根據實際情況調整條件
-            if volatility > 0.01 and volume > 100000:  # 高波動且成交量高
+            if volatility > 0.01 and volume > 100000:
                 profit = calculate_arbitrage_profit([symbol])
                 if profit > best_profit:
                     best_profit = profit
@@ -89,8 +93,10 @@ def calculate_arbitrage_profit(path):
     amount = get_trade_amount()
     for i in range(len(path) - 1):
         symbol = f"{path[i]}{path[i+1]}"
-        price = get_historical_data(symbol)[-1]
-        amount = amount * price * (1 - TRADE_FEE)
+        ticker = client.get_symbol_ticker(symbol=symbol)  # 獲取最新價格
+        if ticker:
+            price = float(ticker["price"])
+            amount = amount * price * (1 - TRADE_FEE)
     return amount - get_trade_amount()
 
 # 📌 記錄交易到 Google Sheets
@@ -102,12 +108,12 @@ def execute_trade(path):
     trade_amount = get_trade_amount()
     expected_profit = calculate_arbitrage_profit(path)
     cost = trade_amount * TRADE_FEE
-    actual_profit = 0  # 初始設定為 0
+    actual_profit = 0
 
     try:
         for symbol in path:
-            client.order_market_buy(symbol=symbol, quantity=trade_amount)
-            print(f"🟢 交易完成: {symbol} ({trade_amount})")
+            client.order_market_buy(symbol=symbol, quoteOrderQty=trade_amount)
+            print(f"🟢 交易完成: {symbol} ({trade_amount} USDT）")
         
         actual_profit = calculate_arbitrage_profit(path)
         status = "成功"
@@ -115,7 +121,6 @@ def execute_trade(path):
         print(f"❌ 交易失敗: {e}")
         status = "失敗"
 
-    # 📌 記錄套利交易
     log_to_google_sheets(
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         path,
@@ -130,7 +135,7 @@ def execute_trade(path):
 
 # 📌 自動執行套利
 def arbitrage():
-    buy_bnb_for_gas()  # 先買 BNB 降低手續費
+    buy_bnb_for_gas()
     best_path, best_profit = select_best_arbitrage_path()
 
     if best_profit > 1:
@@ -139,7 +144,19 @@ def arbitrage():
     else:
         print("❌ 無套利機會")
 
-# 📌 自動復投機制
-while True:
-    arbitrage()
-    time.sleep(5)  # 每 5 秒檢查套利機會
+# ✅ 讓套利交易在背景執行
+def run_arbitrage():
+    while True:
+        arbitrage()
+        time.sleep(5)
+
+# ✅ 啟動套利交易的 API
+@app.route('/start', methods=['GET'])
+def start_arbitrage():
+    thread = threading.Thread(target=run_arbitrage, daemon=True)
+    thread.start()
+    return jsonify({"status": "套利機器人已啟動"}), 200
+
+# ✅ 啟動 Flask API
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
