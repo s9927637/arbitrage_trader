@@ -3,6 +3,6 @@ numpy
 pandas
 keras
 tensorflow
-sklearn
+scikit-learn
 gspread
 oauth2client
