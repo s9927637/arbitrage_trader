@@ -11,6 +11,7 @@ from flask import Flask, jsonify
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from sklearn.preprocessing import MinMaxScaler
+from google.oauth2.service_account import Credentials
 import requests
 
 # 設置日誌
@@ -23,7 +24,7 @@ app = Flask(__name__)
 # 初始化套利狀態
 arbitrage_is_running = False
 
-# 配置 API 鍵與密鑰
+# 設定 Binance API
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 client = Client(API_KEY, API_SECRET, testnet=True)
@@ -37,35 +38,47 @@ creds = service_account.Credentials.from_service_account_info(credentials_info, 
 gsheet = gspread.authorize(creds).open_by_key(SPREADSHEET_ID).sheet1
 service = build('sheets', 'v4', credentials=creds)
 
-# Telegram Bot 配置
+# 從環境變數中獲取 Telegram Bot Token 和 Chat ID
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# 設置常數
+def send_telegram_notification(message):
+    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message
+    }
+    response = requests.post(url, data=payload)
+    if response.status_code == 200:
+        logging.info("Telegram 通知已發送")
+    else:
+        logging.error("Telegram 通知發送失敗")
+
+# 交易參數
 TRADE_FEE = 0.00075
 SLIPPAGE_TOLERANCE = 0.002
 SEQ_LEN = 60  # LSTM使用60筆資料
 scaler = MinMaxScaler(feature_range=(0, 1))
 
-# 取得帳戶資金
+# 📌 取得帳戶資金 (初始資金設為100 USDT)
 def get_account_balance(asset):
     try:
         balance = client.get_asset_balance(asset=asset)
         send_telegram_notification(f"取得 {asset} 餘額: {balance['free']} USDT")
-        return float(balance["free"]) if balance else 0
+        return float(balance["free"]) if balance else 100  # 默認為100 USDT
     except Exception as e:
         logging.error(f"取得 {asset} 餘額失敗: {e}")
         send_telegram_notification(f"取得 {asset} 餘額失敗: {e}")
-        return 0
+        return 100  # 默認為100 USDT
 
-# 計算交易資金
+# 📌 計算交易資金
 def get_trade_amount():
     usdt_balance = get_account_balance("USDT")
     trade_amount = usdt_balance * 0.8
     send_telegram_notification(f"計算的交易資金: {trade_amount} USDT")
     return trade_amount
 
-# 購買 BNB 作為手續費
+# 📌 購買 BNB 作為手續費
 def buy_bnb_for_gas():
     try:
         usdt_balance = get_account_balance("USDT")
@@ -79,7 +92,7 @@ def buy_bnb_for_gas():
         logging.error(f"購買 BNB 失敗: {e}")
         send_telegram_notification(f"購買 BNB 失敗: {e}")
 
-# 計算套利收益
+# 📌 計算套利收益
 def calculate_arbitrage_profit(path):
     amount = get_trade_amount()
     for i in range(len(path) - 1):
@@ -91,17 +104,17 @@ def calculate_arbitrage_profit(path):
     send_telegram_notification(f"計算的套利收益: {amount - get_trade_amount()} USDT")
     return amount - get_trade_amount()
 
-# 記錄交易到 Google Sheets
+# 📌 記錄交易到 Google Sheets
 def log_to_google_sheets(timestamp, path, trade_amount, cost, expected_profit, actual_profit, status):
     try:
-        gsheet.append_row([timestamp, " → ".join(path), trade_amount, cost, expected_profit, actual_profit, status])
+        gsheet.append_row([timestamp, " → ".join(path), trade_amount, cost, expected_profit, actual_profit, status, actual_profit])
         logging.info(f"✅ 交易已記錄至 Google Sheets: {timestamp}")
         send_telegram_notification(f"交易已記錄至 Google Sheets: {timestamp}")
     except Exception as e:
         logging.error(f"記錄交易到 Google Sheets 失敗: {e}")
         send_telegram_notification(f"記錄交易到 Google Sheets 失敗: {e}")
 
-# 執行套利交易
+# 📌 執行套利交易
 def execute_trade(path):
     trade_amount = get_trade_amount()
     expected_profit = calculate_arbitrage_profit(path)
@@ -134,8 +147,9 @@ def execute_trade(path):
 
     logging.info(f"✅ 三角套利完成，實際獲利: {actual_profit} USDT")
 
-# 自動執行套利
+# 📌 自動執行套利
 def arbitrage():
+    send_telegram_notification("即將執行套利交易，請耐心等待...")
     buy_bnb_for_gas()
     best_path, best_profit = select_best_arbitrage_path()
 
@@ -147,7 +161,7 @@ def arbitrage():
         logging.info("❌ 無套利機會")
         send_telegram_notification("無套利機會")
 
-# 讓套利交易在背景執行
+# ✅ 讓套利交易在背景執行
 def run_arbitrage():
     while arbitrage_is_running:
         arbitrage()
@@ -158,6 +172,7 @@ def health_check():
     send_telegram_notification("健康檢查通過")
     return jsonify({"status": "ok"}), 200
 
+# 更新套利狀態並啟動套利
 @app.route('/start', methods=['GET'])
 def start_arbitrage():
     global arbitrage_is_running
@@ -168,6 +183,7 @@ def start_arbitrage():
     send_telegram_notification("套利機器人已啟動")
     return jsonify({"status": "套利機器人已啟動"}), 200
 
+# 停止套利並通知 Telegram
 @app.route('/stop', methods=['GET'])
 def stop_arbitrage():
     global arbitrage_is_running
@@ -176,6 +192,7 @@ def stop_arbitrage():
     send_telegram_notification("套利機器人已停止")
     return jsonify({"status": "套利機器人已停止"}), 200
 
+# 查詢套利機器人狀態
 @app.route('/status', methods=['GET'])
 def get_arbitrage_status():
     if arbitrage_is_running:
@@ -186,4 +203,4 @@ def get_arbitrage_status():
         return jsonify({"status": "idle", "message": "套利機器人閒置"}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
+     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
