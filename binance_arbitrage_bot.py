@@ -20,12 +20,16 @@ API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 client = Client(API_KEY, API_SECRET, testnet=True)
 
-# ✅ 設定 Google Sheets API - 使用 Zeabur 環境變數
-SHEET_NAME = os.getenv("SHEET_NAME", "套利交易紀錄")
+# 使用 Zeabur 環境變數來取得 Google Sheet 的 ID
+SPREADSHEET_ID = os.getenv("GOOGLE_SHEET_ID")  # 從環境變數中獲取 ID
+
+# 設定 Google Sheets API 認證
 CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
-gsheet = gspread.authorize(creds).open(SHEET_NAME).sheet1
+
+# 授權並打開 Google Sheet
+gsheet = gspread.authorize(creds).open_by_key(SPREADSHEET_ID).sheet1
 
 # ✅ 交易參數
 TRADE_FEE = 0.00075
