@@ -65,15 +65,19 @@ scaler = MinMaxScaler(feature_range=(0, 1))
 def get_account_balance(asset):
     try:
         balance = client.get_asset_balance(asset=asset)
+        send_telegram_notification(f"取得 {asset} 餘額: {balance['free']} USDT")
         return float(balance["free"]) if balance else 0
     except Exception as e:
         logging.error(f"取得 {asset} 餘額失敗: {e}")
+        send_telegram_notification(f"取得 {asset} 餘額失敗: {e}")
         return 0
 
 # 📌 計算交易資金
 def get_trade_amount():
     usdt_balance = get_account_balance("USDT")
-    return usdt_balance * 0.8
+    trade_amount = usdt_balance * 0.8
+    send_telegram_notification(f"計算的交易資金: {trade_amount} USDT")
+    return trade_amount
 
 # 📌 購買 BNB 作為手續費
 def buy_bnb_for_gas():
@@ -98,6 +102,7 @@ def calculate_arbitrage_profit(path):
         if ticker:
             price = float(ticker["price"])
             amount = amount * price * (1 - TRADE_FEE)
+    send_telegram_notification(f"計算的套利收益: {amount - get_trade_amount()} USDT")
     return amount - get_trade_amount()
 
 # 📌 記錄交易到 Google Sheets
@@ -121,6 +126,7 @@ def execute_trade(path):
         for symbol in path:
             client.order_market_buy(symbol=symbol, quoteOrderQty=trade_amount)
             logging.info(f"🟢 交易完成: {symbol} ({trade_amount} USDT）")
+            send_telegram_notification(f"交易完成: {symbol} ({trade_amount} USDT）")
         
         actual_profit = calculate_arbitrage_profit(path)
         status = "成功"
@@ -157,12 +163,13 @@ def arbitrage():
 
 # ✅ 讓套利交易在背景執行
 def run_arbitrage():
-    while True:
+    while arbitrage_is_running:
         arbitrage()
         time.sleep(5)
 
 @app.route('/health', methods=['GET'])
 def health_check():
+    send_telegram_notification("健康檢查通過")
     return jsonify({"status": "ok"}), 200
 
 # 更新套利狀態並啟動套利
@@ -189,17 +196,11 @@ def stop_arbitrage():
 @app.route('/status', methods=['GET'])
 def get_arbitrage_status():
     if arbitrage_is_running:
+        send_telegram_notification("套利機器人正在運行中")
         return jsonify({"status": "running", "message": "套利機器人正在運行中"}), 200
     else:
+        send_telegram_notification("套利機器人閒置")
         return jsonify({"status": "idle", "message": "套利機器人閒置"}), 200
 
-# 假設的套利運行函數
-def run_arbitrage():
-    while arbitrage_is_running:
-        # 執行套利邏輯
-        pass  # 在這裡加入你的套利邏輯
-        # 模擬延遲
-        time.sleep(5)
-
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
+    app.run(debug=True, host='0.0.0.0', port=5000)
