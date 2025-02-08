@@ -235,4 +235,4 @@ def stop_arbitrage():
     return jsonify({"status": "套利交易已停止"}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+       app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
