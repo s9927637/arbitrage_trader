@@ -9,7 +9,10 @@ from binance.enums import *
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import LSTM
-from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+from google.auth import default
+from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials
 from flask import Flask, jsonify
 import os
 
