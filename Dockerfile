@@ -7,7 +7,6 @@ WORKDIR /app
 # 更新系統並安裝必要的庫
 RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 RUN pip install google-api-python-client
-RUN pip install tensorflow  # 安裝標準的 TensorFlow
 
 # 複製 requirements.txt 並安裝依賴
 COPY requirements.txt .
