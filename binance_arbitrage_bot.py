@@ -191,6 +191,10 @@ def run_arbitrage():
         arbitrage()
         time.sleep(5)
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok"}), 200
+
 # ✅ 啟動套利交易的 API
 @app.route('/start', methods=['GET'])
 def start_arbitrage():
