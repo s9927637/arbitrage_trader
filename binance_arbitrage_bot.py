@@ -4,7 +4,6 @@ import gspread
 import threading
 import json
 import logging
-import tensorflow as tf
 from datetime import datetime
 from binance.client import Client
 from binance.enums import *
