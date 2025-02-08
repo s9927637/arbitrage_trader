@@ -21,6 +21,9 @@ logging.basicConfig(filename='arbitrage_bot.log', level=logging.INFO,
 # 初始化 Flask API
 app = Flask(__name__)
 
+# 初始化套利狀態
+arbitrage_is_running = False
+
 # 設定 Binance API
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
@@ -162,19 +165,41 @@ def run_arbitrage():
 def health_check():
     return jsonify({"status": "ok"}), 200
 
+# 更新套利狀態並啟動套利
 @app.route('/start', methods=['GET'])
 def start_arbitrage():
+    global arbitrage_is_running
+    arbitrage_is_running = True
     thread = threading.Thread(target=run_arbitrage, daemon=True)
     thread.start()
+    
     send_telegram_notification("套利機器人已啟動")
     return jsonify({"status": "套利機器人已啟動"}), 200
 
+# 停止套利並通知 Telegram
+@app.route('/stop', methods=['GET'])
+def stop_arbitrage():
+    global arbitrage_is_running
+    arbitrage_is_running = False
+    
+    send_telegram_notification("套利機器人已停止")
+    return jsonify({"status": "套利機器人已停止"}), 200
+
+# 查詢套利機器人狀態
 @app.route('/status', methods=['GET'])
 def get_arbitrage_status():
     if arbitrage_is_running:
         return jsonify({"status": "running", "message": "套利機器人正在運行中"}), 200
     else:
         return jsonify({"status": "idle", "message": "套利機器人閒置"}), 200
+
+# 假設的套利運行函數
+def run_arbitrage():
+    while arbitrage_is_running:
+        # 執行套利邏輯
+        pass  # 在這裡加入你的套利邏輯
+        # 模擬延遲
+        time.sleep(5)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
