@@ -12,6 +12,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from sklearn.preprocessing import MinMaxScaler
 from google.oauth2.service_account import Credentials
+import requests
 
 # 設置日誌
 logging.basicConfig(filename='arbitrage_bot.log', level=logging.INFO,
@@ -33,6 +34,23 @@ scopes = ['https://www.googleapis.com/auth/spreadsheets']
 creds = service_account.Credentials.from_service_account_info(credentials_info, scopes=scopes)
 gsheet = gspread.authorize(creds).open_by_key(SPREADSHEET_ID).sheet1
 service = build('sheets', 'v4', credentials=creds)
+
+
+# 從環境變數中獲取 Telegram Bot Token 和 Chat ID
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
+def send_telegram_notification(message):
+    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message
+    }
+    response = requests.post(url, data=payload)
+    if response.status_code == 200:
+        logging.info("Telegram 通知已發送")
+    else:
+        logging.error("Telegram 通知發送失敗")
 
 # 交易參數
 TRADE_FEE = 0.00075
@@ -63,8 +81,10 @@ def buy_bnb_for_gas():
             buy_amount = usdt_balance * 0.2  # 使用 20% USDT 購 BNB
             client.order_market_buy(symbol="BNBUSDT", quoteOrderQty=buy_amount)
             logging.info(f"✅ 購買 {buy_amount} USDT 的 BNB 作為手續費")
+            send_telegram_notification(f"購買 {buy_amount} USDT 的 BNB 作為手續費")
     except Exception as e:
         logging.error(f"購買 BNB 失敗: {e}")
+        send_telegram_notification(f"購買 BNB 失敗: {e}")
 
 # 📌 計算套利收益
 def calculate_arbitrage_profit(path):
@@ -82,8 +102,10 @@ def log_to_google_sheets(timestamp, path, trade_amount, cost, expected_profit, a
     try:
         gsheet.append_row([timestamp, " → ".join(path), trade_amount, cost, expected_profit, actual_profit, status])
         logging.info(f"✅ 交易已記錄至 Google Sheets: {timestamp}")
+        send_telegram_notification(f"交易已記錄至 Google Sheets: {timestamp}")
     except Exception as e:
         logging.error(f"記錄交易到 Google Sheets 失敗: {e}")
+        send_telegram_notification(f"記錄交易到 Google Sheets 失敗: {e}")
 
 # 📌 執行套利交易
 def execute_trade(path):
@@ -96,11 +118,13 @@ def execute_trade(path):
         for symbol in path:
             client.order_market_buy(symbol=symbol, quoteOrderQty=trade_amount)
             logging.info(f"🟢 交易完成: {symbol} ({trade_amount} USDT）")
-
+        
         actual_profit = calculate_arbitrage_profit(path)
         status = "成功"
+        send_telegram_notification(f"套利交易成功，實際獲利: {actual_profit} USDT")
     except Exception as e:
         logging.error(f"❌ 交易失敗: {e}")
+        send_telegram_notification(f"套利交易失敗: {e}")
         status = "失敗"
 
     log_to_google_sheets(
@@ -122,9 +146,11 @@ def arbitrage():
 
     if best_profit > 1:
         logging.info(f"✅ 最佳套利路徑: {' → '.join(best_path)}，預期獲利 {best_profit:.2f} USDT")
+        send_telegram_notification(f"最佳套利路徑: {' → '.join(best_path)}，預期獲利 {best_profit:.2f} USDT")
         execute_trade(best_path)
     else:
         logging.info("❌ 無套利機會")
+        send_telegram_notification("無套利機會")
 
 # ✅ 讓套利交易在背景執行
 def run_arbitrage():
@@ -140,6 +166,7 @@ def health_check():
 def start_arbitrage():
     thread = threading.Thread(target=run_arbitrage, daemon=True)
     thread.start()
+    send_telegram_notification("套利機器人已啟動")
     return jsonify({"status": "套利機器人已啟動"}), 200
 
 @app.route('/status', methods=['GET'])
