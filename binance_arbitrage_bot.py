@@ -20,9 +20,6 @@ import os
 from google.oauth2 import service_account
 from tenacity import retry, wait_fixed, stop_after_attempt, retry_if_exception_type
 
-# ✅ 禁用 GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  
-
 # ✅ 設定日誌記錄
 logging.basicConfig(filename='arbitrage_bot.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
