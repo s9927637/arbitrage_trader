@@ -6,17 +6,18 @@ from binance.client import Client
 from binance.enums import *
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
-from keras.layers import LSTM, Dense
+from keras.layers import LSTM
 from oauth2client.service_account import ServiceAccountCredentials
+import os
 
-# ✅ 設定 Binance API
-API_KEY = "你的測試網 API Key"
-API_SECRET = "你的測試網 API Secret"
+# ✅ 設定 Binance API - 使用 Zeabur 環境變數
+API_KEY = os.getenv("BINANCE_API_KEY")
+API_SECRET = os.getenv("BINANCE_API_SECRET")
 client = Client(API_KEY, API_SECRET, testnet=True)
 
-# ✅ 設定 Google Sheets API
-SHEET_NAME = "套利交易紀錄"
-CREDENTIALS_FILE = "credentials.json"
+# ✅ 設定 Google Sheets API - 使用 Zeabur 環境變數
+SHEET_NAME = os.getenv("SHEET_NAME", "套利交易紀錄")
+CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
 gsheet = gspread.authorize(creds).open(SHEET_NAME).sheet1
