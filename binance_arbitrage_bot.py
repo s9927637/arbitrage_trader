@@ -24,12 +24,12 @@ client = Client(API_KEY, API_SECRET, testnet=True)
 SPREADSHEET_ID = os.getenv("GOOGLE_SHEET_ID")  # 從環境變數中獲取 ID
 
 # 設定 Google Sheets API 認證
-CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
+credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+credentials_info = json.loads(credentials_json)
+credentials = service_account.Credentials.from_service_account_info(credentials_info)
 
 # 授權並打開 Google Sheet
-gsheet = gspread.authorize(creds).open_by_key(SPREADSHEET_ID).sheet1
+gsheet = gspread.authorize(credentials).open_by_key(SPREADSHEET_ID).sheet1
 
 # ✅ 交易參數
 TRADE_FEE = 0.00075
