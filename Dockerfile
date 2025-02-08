@@ -1,11 +1,10 @@
 # 使用最新的 Debian 作為基礎映像
-FROM python:latest
+FROM python:3.9-slim
 
 # 設定工作目錄
 WORKDIR /app
 
 # 更新系統並安裝必要的庫
-RUN python --version
 RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 
 # 複製 requirements.txt 並安裝依賴
