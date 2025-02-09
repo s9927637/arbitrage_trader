@@ -10,6 +10,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import requests
 from datetime import datetime
+import websocket
+import json as ws_json
 
 # 設置日誌
 logging.basicConfig(filename='arbitrage_bot.log', level=logging.INFO,
@@ -26,6 +28,8 @@ client = Client(API_KEY, API_SECRET, testnet=True)
 # Google Sheets 設定
 SPREADSHEET_ID = os.getenv("GOOGLE_SHEET_ID")
 credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+if not credentials_json:
+    raise ValueError("⚠️ GOOGLE_CREDENTIALS_JSON 環境變數未設置！")
 credentials_info = json.loads(credentials_json)
 scopes = ['https://www.googleapis.com/auth/spreadsheets']
 creds = service_account.Credentials.from_service_account_info(credentials_info, scopes=scopes)
@@ -80,7 +84,9 @@ def get_trade_amount():
 def get_price(symbol):
     try:
         ticker = client.get_symbol_ticker(symbol=symbol)
-        return float(ticker['price']) if ticker else None
+        if ticker and 'price' in ticker:
+            return float(ticker['price'])
+        return None
     except Exception as e:
         logging.error(f"取得 {symbol} 價格失敗: {e}")
         return None
@@ -139,7 +145,10 @@ def execute_trade(path):
         for i in range(len(path) - 1):
             symbol = f"{path[i]}{path[i+1]}"
             if is_pair_tradable(symbol):
-                client.order_market_buy(symbol=symbol, quoteOrderQty=trade_amount)
+                if trade_amount > 0:
+                    client.order_market_buy(symbol=symbol, quoteOrderQty=trade_amount)
+                else:
+                    logging.error(f"❌ 交易金額為 0，無法執行交易: {trade_amount}")
         
         actual_profit = calculate_profit(path)
         log_to_google_sheets(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), path, trade_amount, cost, expected_profit, actual_profit, "成功")
@@ -161,6 +170,30 @@ def arbitrage_loop():
             send_telegram_message("❌ 無套利機會，10 秒後重試")
         time.sleep(10)
 
+# 📌 WebSocket 監測價格變動（實時更新）
+def on_message(ws, message):
+    data = ws_json.loads(message)
+    if 's' in data and 'p' in data:
+        symbol = data['s']
+        price = float(data['p'])
+        logging.info(f"接收到 {symbol} 價格更新: {price}")
+        # 根據新的價格更新套利機會（如果有必要）
+
+def on_error(ws, error):
+    logging.error(f"WebSocket 錯誤: {error}")
+
+def on_close(ws, close_status_code, close_msg):
+    logging.info("WebSocket 關閉")
+
+def on_open(ws):
+    logging.info("WebSocket 連接成功")
+
+def start_websocket():
+    url = "wss://stream.binance.com:9443/ws/!miniTicker@arr"
+    ws = websocket.WebSocketApp(url, on_message=on_message, on_error=on_error, on_close=on_close)
+    ws.on_open = on_open
+    ws.run_forever()
+
 # ✅ 監聽 API
 @app.route('/start_arbitrage', methods=['GET'])
 def start_arbitrage():
@@ -180,4 +213,5 @@ def stop_arbitrage():
     return jsonify({"status": "套利交易已停止"}), 200
 
 if __name__ == '__main__':
+    threading.Thread(target=start_websocket).start()
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
