@@ -152,6 +152,7 @@ def monitor_price_changes():
                     # 可以加入額外條件來觸發某些操作，例如進行套利檢查
                     for path in TRADE_PATHS:
                         if path[0] == symbol.split('usdt')[0].upper():
+                            logging.info(f"📊 開始執行套利計算: {' → '.join(path)}")
                             execute_trade(path)
             last_prices[symbol] = current_price
         time.sleep(PRICE_CHANGE_MONITOR_INTERVAL)
@@ -220,12 +221,14 @@ def arbitrage_opportunities():
         profit = calculate_profit(path)
         if profit > 0:
             opportunities.append({
-                'path': ' → '.join(path),
-                'profit': profit
+                "path": " → ".join(path),
+                "profit": profit
             })
     return jsonify(opportunities)
 
-# ✅ 主循環
 if __name__ == '__main__':
-    threading.Thread(target=monitor_price_changes, daemon=True).start()  # 啟動價格變動監控
-    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
+    # 啟動價格變動檢測
+    threading.Thread(target=monitor_price_changes, daemon=True).start()
+
+    # 啟動 Flask 服務
+    app.run(host='0.0.0.0', port=8080)
