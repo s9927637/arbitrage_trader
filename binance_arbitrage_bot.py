@@ -87,6 +87,53 @@ except Exception as e:
     print(error_msg)
     raise
 
+# ✅ 賬戶餘額檢查與購買BNB
+def check_balance_and_buy_bnb():
+    try:
+        # 查詢賬戶餘額
+        account_info = client.get_account()
+        usdt_balance = 0
+        for asset in account_info['balances']:
+            if asset['asset'] == 'USDT':
+                usdt_balance = float(asset['free'])
+        
+        if usdt_balance < MIN_TRADE_AMOUNT:
+            logging.warning(f"⚠️ 賬戶USDT餘額不足，無法進行交易 (USDT餘額: {usdt_balance})")
+            return
+
+        # 計算20%的USDT餘額來購買BNB
+        buy_amount_usdt = usdt_balance * 0.2  # 購買20%的USDT餘額
+        bnb_price = prices.get('bnbusdt')
+
+        if not bnb_price:
+            logging.warning("⚠️ 無法獲取BNB價格，無法進行購買")
+            return
+
+        # 計算購買的BNB數量
+        bnb_quantity = buy_amount_usdt / bnb_price
+        bnb_quantity = round(bnb_quantity, 2)  # 保留兩位小數
+        
+        if bnb_quantity < 0.01:
+            logging.warning("⚠️ 計算出的BNB數量過少，無法進行購買")
+            return
+
+        # 發送購買BNB的訂單
+        logging.info(f"🚀 嘗試購買 {bnb_quantity} BNB，總價: {buy_amount_usdt} USDT")
+        order = client.order_market_buy(symbol='bnbusdt', quantity=bnb_quantity)
+        logging.info(f"✅ 成功購買 {bnb_quantity} BNB，訂單詳細信息: {order}")
+
+    except Exception as e:
+        logging.error(f"查詢餘額或購買BNB時發生錯誤: {e}")
+
+# ✅ 定時檢查賬戶餘額並進行BNB購買
+def monitor_and_buy_bnb():
+    while True:
+        check_balance_and_buy_bnb()
+        time.sleep(3600)  # 每小時檢查一次餘額並購買BNB
+
+# ✅ 啟動購買BNB監控
+threading.Thread(target=monitor_and_buy_bnb, daemon=True).start()
+
 # ✅ WebSocket 監聽價格
 prices = {}
 last_prices = {}
@@ -173,63 +220,36 @@ def monitor_price_changes():
         time.sleep(PRICE_CHANGE_MONITOR_INTERVAL)
 
 # ✅ 計算套利利潤
-def calculate_profit(path):
-    amount = MIN_TRADE_AMOUNT
-    initial_amount = amount
-
-    for i in range(len(path) - 1):
-        symbol = f"{path[i+1]}{path[i]}".lower()  # ✅ 修正交易對名稱
-        price = prices.get(symbol)
-
-        if not price:
-            logging.warning(f"⚠️ 缺少 {symbol.upper()} 的價格")
-            return 0
-
-        amount *= price * (1 - TRADE_FEE)
-
-    profit = amount - initial_amount
-    return profit if profit > MIN_PROFIT_THRESHOLD else 0
-
-# ✅ 執行交易
 def execute_trade(path):
     logging.info(f"🚀 嘗試執行套利: {' → '.join(path)}")
     profit = calculate_profit(path)
 
-    if profit > 0:
-        logging.info(f"💰 套利成功，預計利潤: {profit:.2f} USDT")
-        
-        # 自動記錄套利交易到 Google Sheets
-        record_trade(path, profit)
-        
-        # 透過 Telegram 通知
-        send_telegram_message(f"🚀 套利成功! 路徑: {' → '.join(path)}, 預計利潤: {profit:.2f} USDT")
-    else:
+    # 確保交易金額符合限制
+    if profit < MIN_PROFIT_THRESHOLD:
         logging.info(f"❌ 無利潤套利，跳過此次交易")
+        return
 
-# ✅ 記錄交易至 Google Sheets
-def record_trade(path, profit):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    gsheet.append_row([timestamp, ' → '.join(path), profit])
-    logging.info(f"📋 記錄交易到 Google Sheets: {' → '.join(path)} 利潤: {profit:.2f} USDT")
+    # 計算交易金額（根據最大交易金額和可用資金進行調整）
+    trade_amount = min(MAX_TRADE_AMOUNT, profit)
+    if trade_amount < MIN_TRADE_AMOUNT:
+        logging.info(f"❌ 交易金額低於最小限制，跳過此次交易")
+        return
 
-# ✅ 發送 Telegram 訊息
-def send_telegram_message(message):
-    try:
-        url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
-        payload = {"chat_id": os.getenv("TELEGRAM_CHAT_ID"), "text": message}
-        response = requests.post(url, data=payload)
-        response.raise_for_status()
-        logging.info(f"✅ 透過 Telegram 發送訊息: {message}")
-    except Exception as e:
-        logging.error(f"Telegram 訊息發送失敗: {e}")
+    logging.info(f"💰 套利成功，預計利潤: {profit:.2f} USDT")
 
-# ✅ 啟動價格監控
+    # 自動記錄套利交易到 Google Sheets
+    record_trade(path, profit)
+        
+    # 透過 Telegram 通知
+    send_telegram_message(f"🚀 套利成功! 路徑: {' → '.join(path)}, 預計利潤: {profit:.2f} USDT")
+
+
+# ✅ 啟動價格變動檢測
 threading.Thread(target=monitor_price_changes, daemon=True).start()
 
-# ✅ Flask 路由設置
-@app.route("/")
-def home():
-    return jsonify({"status": "OK", "message": "套利機器人運行中"})
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "message": "套利機器人正在運行中"})
 
 # ✅ 啟動 Flask 應用
 if __name__ == "__main__":
