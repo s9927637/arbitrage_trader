@@ -72,6 +72,15 @@ try:
 
     client = Client(os.getenv("BINANCE_API_KEY"), os.getenv("BINANCE_API_SECRET"), testnet=True)
 
+    # 獲取可用交易對並檢查所需的交易對是否存在
+    exchange_info = client.get_exchange_info()
+    symbols = [s['symbol'] for s in exchange_info['symbols']]
+    required_symbols = ['USDTBNB', 'USDTBTC', 'BTCUSDT', 'ETHUSDT']
+
+    missing_symbols = [symbol for symbol in required_symbols if symbol not in symbols]
+    if missing_symbols:
+        raise ValueError(f"缺少必要的交易對: {', '.join(missing_symbols)}")
+
     creds_info = json.loads(os.getenv('GOOGLE_CREDENTIALS_JSON'))
     creds = service_account.Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
     gsheet = gspread.authorize(creds).open_by_key(os.getenv("GOOGLE_SHEET_ID")).sheet1
