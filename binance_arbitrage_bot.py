@@ -43,27 +43,6 @@ def check_env_vars():
     if missing_vars:
         raise EnvironmentError(f"缺少環境變數: {', '.join(missing_vars)}")
 
-# ✅ Telegram 日誌處理器
-class TelegramLoggingHandler(logging.Handler):
-    def __init__(self, token, chat_id):
-        super().__init__()
-        self.token = token
-        self.chat_id = chat_id
-        
-    def emit(self, record):
-        log_message = f"🔔 {record.levelname}\n{self.format(record)}\n🕒 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        self.send_telegram_message(log_message)
-
-    def send_telegram_message(self, message):
-        try:
-            requests.post(f"https://api.telegram.org/bot{self.token}/sendMessage", json={
-                "chat_id": self.chat_id,
-                "text": message,
-                "parse_mode": "HTML"
-            }, timeout=5)
-        except requests.exceptions.RequestException as e:
-            print(f"Telegram發送失敗: {e}")
-
 # ✅ 初始化系統
 try:
     check_env_vars()
@@ -72,23 +51,19 @@ try:
 
     client = Client(os.getenv("BINANCE_API_KEY"), os.getenv("BINANCE_API_SECRET"), testnet=True)
 
-    # 獲取可用交易對並檢查所需的交易對是否存在
+    # 檢查 Binance 支持的交易對
     exchange_info = client.get_exchange_info()
-    symbols = [s['symbol'] for s in exchange_info['symbols']]
-    logging.info("可用的交易對: %s", symbols)
-
-    required_symbols = ['USDTBNB', 'USDTBTC', 'BTCUSDT', 'ETHUSDT']
-    missing_symbols = [symbol for symbol in required_symbols if symbol not in symbols]
+    available_symbols = {s['symbol'].lower() for s in exchange_info['symbols']}
+    
+    required_symbols = {'bnbusdt', 'btcusdt', 'ethusdt', 'ethbnb'}
+    missing_symbols = required_symbols - available_symbols
     if missing_symbols:
         raise ValueError(f"缺少必要的交易對: {', '.join(missing_symbols)}")
 
+    # Google Sheets 連接
     creds_info = json.loads(os.getenv('GOOGLE_CREDENTIALS_JSON'))
     creds = service_account.Credentials.from_service_account_info(creds_info, scopes=['https://www.googleapis.com/auth/spreadsheets'])
     gsheet = gspread.authorize(creds).open_by_key(os.getenv("GOOGLE_SHEET_ID")).sheet1
-
-    telegram_handler = TelegramLoggingHandler(os.getenv('TELEGRAM_BOT_TOKEN'), os.getenv('TELEGRAM_CHAT_ID'))
-    telegram_handler.setLevel(logging.INFO)
-    logging.getLogger().addHandler(telegram_handler)
 
     logging.info("✅ 系統初始化成功")
 
@@ -103,7 +78,6 @@ prices = {}
 def on_message(ws, message):
     try:
         data = json.loads(message)
-
         if 's' in data and 'c' in data:
             symbol = data['s'].lower()
             price = float(data['c'])
@@ -111,7 +85,6 @@ def on_message(ws, message):
             logging.info(f"📈 {symbol.upper()} 最新價格: {price}")
         else:
             logging.warning(f"⚠️ 無法解析 WebSocket 數據: {data}")
-
     except Exception as e:
         logging.error(f"WebSocket 處理錯誤: {str(e)}")
 
@@ -124,7 +97,7 @@ def on_close(ws, close_status_code, close_msg):
     start_websocket()
 
 def on_open(ws):
-    symbols = ["bnbusdt", "btcusdt", "ethusdt"]
+    symbols = ["bnbusdt", "btcusdt", "ethusdt", "ethbnb"]  # ✅ 訂閱所有套利交易對
     payload = {
         "method": "SUBSCRIBE",
         "params": [f"{symbol}@ticker" for symbol in symbols],
@@ -149,11 +122,11 @@ def calculate_profit(path):
     initial_amount = amount
 
     for i in range(len(path) - 1):
-        symbol = f"{path[i]}{path[i+1]}".lower()
+        symbol = f"{path[i+1]}{path[i]}".lower()  # ✅ 修正交易對名稱
         price = prices.get(symbol)
 
         if not price:
-            logging.warning(f"⚠️ 缺少 {symbol} 的價格")
+            logging.warning(f"⚠️ 缺少 {symbol.upper()} 的價格")
             return 0
 
         amount *= price * (1 - TRADE_FEE)
