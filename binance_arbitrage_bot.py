@@ -57,6 +57,18 @@ try:
     
     required_symbols = {'bnbusdt', 'btcusdt', 'ethusdt', 'ethbnb'}
     missing_symbols = required_symbols - available_symbols
+
+    # 允許替代交易對
+    alternative_pairs = {
+        "usdtbnb": "bnbusdt",
+        "usdtbtc": "btcusdt"
+    }
+
+    for pair in list(missing_symbols):
+        if pair in alternative_pairs and alternative_pairs[pair] in available_symbols:
+            print(f"⚠️ 找不到 {pair}，將使用 {alternative_pairs[pair]} 代替")
+            missing_symbols.remove(pair)
+
     if missing_symbols:
         raise ValueError(f"缺少必要的交易對: {', '.join(missing_symbols)}")
 
@@ -141,10 +153,49 @@ def execute_trade(path):
 
     if profit > 0:
         logging.info(f"💰 套利成功，預計利潤: {profit:.2f} USDT")
+        
+        # 自動記錄套利交易到 Google Sheets
+        record_trade(path, profit)
+        
+        # 透過 Telegram 通知套利成功
+        send_telegram_message(f"成功執行套利: {' → '.join(path)}，利潤: {profit:.2f} USDT")
+        
         return True
     else:
         logging.warning("⚠️ 沒有套利機會")
         return False
+
+# ✅ 記錄套利交易到 Google Sheets
+def record_trade(path, profit):
+    trade_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    gsheet.append_row([trade_time, ' → '.join(path), profit])
+    logging.info(f"✅ 套利交易已記錄到 Google Sheets: {' → '.join(path)}，利潤: {profit:.2f} USDT")
+
+# ✅ 透過 Telegram 發送消息
+def send_telegram_message(message):
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": message}
+    try:
+        response = requests.post(url, data=payload)
+        response.raise_for_status()
+        logging.info("✅ Telegram 通知發送成功")
+    except Exception as e:
+        logging.error(f"Telegram 通知發送失敗: {str(e)}")
+
+# ✅ 提供 Flask API 查詢套利機會
+@app.route('/arbitrage_opportunities', methods=['GET'])
+def arbitrage_opportunities():
+    opportunities = []
+    for path in TRADE_PATHS:
+        profit = calculate_profit(path)
+        if profit > 0:
+            opportunities.append({
+                'path': ' → '.join(path),
+                'profit': profit
+            })
+    return jsonify(opportunities)
 
 # ✅ 選擇最佳套利路徑
 def find_best_arbitrage():
