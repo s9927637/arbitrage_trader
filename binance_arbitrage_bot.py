@@ -16,12 +16,12 @@ import traceback
 # ✅ 常量定義
 TRADE_FEE = 0.00075  # 交易手續費
 SLIPPAGE_TOLERANCE = 0.002  # 滑點容忍度
-MIN_PROFIT_THRESHOLD = 0.001  # 最小利潤閾值
+MIN_PROFIT_THRESHOLD = 0.0001  # 調整最小利潤閾值，降低觸發條件
 MIN_TRADE_AMOUNT = 10  # 最小交易金額(USDT)
 MAX_TRADE_AMOUNT = 1000  # 最大交易金額(USDT)
 WEBSOCKET_PING_INTERVAL = 30  # WebSocket心跳間隔
-PRICE_CHANGE_THRESHOLD = 0.01  # 價格變動閾值(1%)
-PRICE_CHANGE_MONITOR_INTERVAL = 60  # 價格變動檢測間隔
+PRICE_CHANGE_THRESHOLD = 0.001  # 價格變動閾值 (0.1%)
+PRICE_CHANGE_MONITOR_INTERVAL = 60  # 價格變動檢測間隔 (秒)
 
 # ✅ 交易路徑設置
 TRADE_PATHS = [
@@ -201,48 +201,36 @@ def execute_trade(path):
         # 自動記錄套利交易到 Google Sheets
         record_trade(path, profit)
         
-        # 透過 Telegram 通知套利成功
-        send_telegram_message(f"成功執行套利: {' → '.join(path)}，利潤: {profit:.2f} USDT")
-        
-        return True
+        # 透過 Telegram 通知
+        send_telegram_message(f"🚀 套利成功! 路徑: {' → '.join(path)}, 預計利潤: {profit:.2f} USDT")
     else:
-        logging.warning("⚠️ 沒有套利機會")
-        return False
+        logging.info(f"❌ 無利潤套利，跳過此次交易")
 
-# ✅ 記錄套利交易到 Google Sheets
+# ✅ 記錄交易至 Google Sheets
 def record_trade(path, profit):
-    trade_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    gsheet.append_row([trade_time, ' → '.join(path), profit])
-    logging.info(f"✅ 套利交易已記錄到 Google Sheets: {' → '.join(path)}，利潤: {profit:.2f} USDT")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    gsheet.append_row([timestamp, ' → '.join(path), profit])
+    logging.info(f"📋 記錄交易到 Google Sheets: {' → '.join(path)} 利潤: {profit:.2f} USDT")
 
-# ✅ 透過 Telegram 發送消息
+# ✅ 發送 Telegram 訊息
 def send_telegram_message(message):
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message}
     try:
+        url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
+        payload = {"chat_id": os.getenv("TELEGRAM_CHAT_ID"), "text": message}
         response = requests.post(url, data=payload)
         response.raise_for_status()
-        logging.info("✅ Telegram 通知發送成功")
+        logging.info(f"✅ 透過 Telegram 發送訊息: {message}")
     except Exception as e:
-        logging.error(f"Telegram 通知發送失敗: {str(e)}")
+        logging.error(f"Telegram 訊息發送失敗: {e}")
 
-# ✅ 提供 Flask API 查詢套利機會
-@app.route('/arbitrage_opportunities', methods=['GET'])
-def arbitrage_opportunities():
-    opportunities = []
-    for path in TRADE_PATHS:
-        profit = calculate_profit(path)
-        if profit > 0:
-            opportunities.append({
-                "path": " → ".join(path),
-                "profit": profit
-            })
-    return jsonify(opportunities)
+# ✅ 啟動價格監控
+threading.Thread(target=monitor_price_changes, daemon=True).start()
 
+# ✅ Flask 路由設置
+@app.route("/")
+def home():
+    return jsonify({"status": "OK", "message": "套利機器人運行中"})
+
+# ✅ 啟動 Flask 應用
 if __name__ == "__main__":
-    # 啟動價格變動監控
-    threading.Thread(target=monitor_price_changes, daemon=True).start()
-
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app.run(host="0.0.0.0", port=5000)
