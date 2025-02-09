@@ -90,15 +90,22 @@ except Exception as e:
 # ✅ WebSocket 監聽價格
 prices = {}
 last_prices = {}
+last_logged_time = time.time()
 
 def on_message(ws, message):
+    global last_logged_time
     try:
         data = json.loads(message)
         if 's' in data and 'c' in data:
             symbol = data['s'].lower()
             price = float(data['c'])
             prices[symbol] = price
-            logging.info(f"📈 {symbol.upper()} 最新價格: {price}")
+            
+            # 設置每 30 秒記錄一次價格
+            current_time = time.time()
+            if current_time - last_logged_time >= 30:  # 每 30 秒記錄一次
+                logging.info(f"📈 {symbol.upper()} 最新價格: {price}")
+                last_logged_time = current_time
         else:
             logging.warning(f"⚠️ 無法解析 WebSocket 數據: {data}")
     except Exception as e:
