@@ -25,4 +25,4 @@ RUN chmod +x binance_arbitrage_bot.py
 CMD ["python3", "binance_arbitrage_bot.py"]
 
 # 開放 8080 端口
-EXPOSE 8080
+EXPOSE 5000
