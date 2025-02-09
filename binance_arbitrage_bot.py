@@ -13,6 +13,12 @@ import websocket
 from datetime import datetime
 import traceback
 
+app = Flask(__name__)
+
+# 用於保存機器人運行狀況的變數
+is_bot_running = True  # 假設目前機器人已啟動，如果機器人有停止或崩潰，則可更改為 False
+
+
 # ✅ 常量定義
 TRADE_FEE = 0.00075  # 交易手續費
 SLIPPAGE_TOLERANCE = 0.002  # 滑點容忍度
@@ -250,6 +256,18 @@ threading.Thread(target=monitor_price_changes, daemon=True).start()
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "message": "套利機器人正在運行中"})
+
+@app.route("/status")
+def status():
+    # 可以根據具體情況進行調整，這裡假設用變數 `is_bot_running` 來表示機器人狀態
+    bot_status = "運行中" if is_bot_running else "未啟動"
+    
+    # 根據實際需求，可以將這些訊息存儲在外部系統中，或者自動更新
+    return jsonify({
+        "bot_status": bot_status,
+        "uptime": "已運行 24 小時",  # 示例，可根據實際情況自動計算
+        "message": "機器人運行狀態查詢"
+    })
 
 # ✅ 啟動 Flask 應用
 if __name__ == "__main__":
