@@ -245,4 +245,4 @@ if __name__ == "__main__":
     # 啟動價格變動監控
     threading.Thread(target=monitor_price_changes, daemon=True).start()
 
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8080)
