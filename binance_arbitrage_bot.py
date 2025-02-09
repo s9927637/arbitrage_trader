@@ -9,9 +9,8 @@ from flask import Flask, jsonify
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import requests
-from datetime import datetime
 import websocket
-import json as ws_json
+from datetime import datetime
 
 # 設置日誌
 logging.basicConfig(filename='arbitrage_bot.log', level=logging.INFO,
@@ -170,27 +169,37 @@ def arbitrage_loop():
             send_telegram_message("❌ 無套利機會，10 秒後重試")
         time.sleep(10)
 
-# 📌 WebSocket 監測價格變動（實時更新）
+# 📌 WebSocket 監控實時價格
 def on_message(ws, message):
-    data = ws_json.loads(message)
-    if 's' in data and 'p' in data:
-        symbol = data['s']
-        price = float(data['p'])
-        logging.info(f"接收到 {symbol} 價格更新: {price}")
-        # 根據新的價格更新套利機會（如果有必要）
+    try:
+        message = json.loads(message)
+        symbol = message['s']
+        price = float(message['p'])
+        logging.info(f"實時價格: {symbol} -> {price}")
+        # 您可以根據此價格進行進一步處理，例如判斷套利機會
+    except Exception as e:
+        logging.error(f"處理 WebSocket 訊息失敗: {e}")
 
 def on_error(ws, error):
     logging.error(f"WebSocket 錯誤: {error}")
 
 def on_close(ws, close_status_code, close_msg):
-    logging.info("WebSocket 關閉")
+    logging.info("WebSocket 連線已關閉")
 
 def on_open(ws):
-    logging.info("WebSocket 連接成功")
+    logging.info("WebSocket 連線已開啟")
+    # 訂閱實時價格流
+    params = {
+        "method": "SUBSCRIBE",
+        "params": ["btcusdt@trade", "ethusdt@trade"],  # 您可以訂閱更多的交易對
+        "id": 1
+    }
+    ws.send(json.dumps(params))
 
+# ✅ WebSocket 監控
 def start_websocket():
-    url = "wss://stream.binance.com:9443/ws/!miniTicker@arr"
-    ws = websocket.WebSocketApp(url, on_message=on_message, on_error=on_error, on_close=on_close)
+    ws_url = "wss://stream.binance.com:9443/ws/btcusdt@trade"
+    ws = websocket.WebSocketApp(ws_url, on_message=on_message, on_error=on_error, on_close=on_close)
     ws.on_open = on_open
     ws.run_forever()
 
@@ -213,5 +222,5 @@ def stop_arbitrage():
     return jsonify({"status": "套利交易已停止"}), 200
 
 if __name__ == '__main__':
-    threading.Thread(target=start_websocket).start()
+    threading.Thread(target=start_websocket).start()  # 啟動 WebSocket 監控實時價格
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
