@@ -7,3 +7,4 @@ scikit-learn
 gspread
 oauth2client
 Flask
+websocket-client
