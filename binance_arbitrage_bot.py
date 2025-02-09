@@ -91,22 +91,33 @@ except Exception as e:
 prices = {}
 
 def on_message(ws, message):
-    data = json.loads(message)
-    symbol = data['s']
-    price = float(data['c'])
-    prices[symbol] = price
+    try:
+        data = json.loads(message)
+
+        if 's' in data and 'c' in data:
+            symbol = data['s'].lower()
+            price = float(data['c'])
+            prices[symbol] = price
+            logging.info(f"📈 {symbol.upper()} 最新價格: {price}")
+        else:
+            logging.warning(f"⚠️ 無法解析 WebSocket 數據: {data}")
+
+    except Exception as e:
+        logging.error(f"WebSocket 處理錯誤: {str(e)}")
 
 def on_error(ws, error):
-    logging.error(f"WebSocket錯誤: {error}")
+    logging.error(f"WebSocket 錯誤: {error}")
 
 def on_close(ws, close_status_code, close_msg):
-    logging.warning("WebSocket連線關閉")
+    logging.warning("WebSocket 連線關閉，嘗試重連...")
+    time.sleep(5)
+    start_websocket()
 
 def on_open(ws):
-    symbols = ["BNBUSDT", "BTCUSDT", "ETHUSDT"]
+    symbols = ["bnbusdt", "btcusdt", "ethusdt"]
     payload = {
         "method": "SUBSCRIBE",
-        "params": [f"{symbol.lower()}@ticker" for symbol in symbols],
+        "params": [f"{symbol}@ticker" for symbol in symbols],
         "id": 1
     }
     ws.send(json.dumps(payload))
@@ -128,7 +139,7 @@ def calculate_profit(path):
     initial_amount = amount
 
     for i in range(len(path) - 1):
-        symbol = f"{path[i]}{path[i+1]}"
+        symbol = f"{path[i]}{path[i+1]}".lower()
         price = prices.get(symbol)
 
         if not price:
@@ -169,4 +180,4 @@ while True:
     time.sleep(5)
 
 if __name__ == '__main__':
-     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 80)))
+    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
