@@ -21,6 +21,7 @@ MIN_TRADE_AMOUNT = 10  # 最小交易金額(USDT)
 MAX_TRADE_AMOUNT = 1000  # 最大交易金額(USDT)
 WEBSOCKET_PING_INTERVAL = 30  # WebSocket心跳間隔
 PRICE_CHANGE_THRESHOLD = 0.01  # 價格變動閾值(1%)
+PRICE_CHANGE_MONITOR_INTERVAL = 60  # 價格變動檢測間隔
 
 # ✅ 交易路徑設置
 TRADE_PATHS = [
@@ -88,6 +89,7 @@ except Exception as e:
 
 # ✅ WebSocket 監聽價格
 prices = {}
+last_prices = {}
 
 def on_message(ws, message):
     try:
@@ -129,6 +131,23 @@ def start_websocket():
     ws.run_forever()
 
 threading.Thread(target=start_websocket, daemon=True).start()
+
+# ✅ 價格變動檢測
+def monitor_price_changes():
+    global last_prices
+    while True:
+        for symbol, current_price in prices.items():
+            if symbol in last_prices:
+                last_price = last_prices[symbol]
+                price_change = abs(current_price - last_price) / last_price
+                if price_change >= PRICE_CHANGE_THRESHOLD:
+                    logging.info(f"📉 {symbol.upper()} 價格變動超過 {PRICE_CHANGE_THRESHOLD * 100}%: {last_price} → {current_price}")
+                    # 可以加入額外條件來觸發某些操作，例如進行套利檢查
+                    for path in TRADE_PATHS:
+                        if path[0] == symbol.split('usdt')[0].upper():
+                            execute_trade(path)
+            last_prices[symbol] = current_price
+        time.sleep(PRICE_CHANGE_MONITOR_INTERVAL)
 
 # ✅ 計算套利利潤
 def calculate_profit(path):
@@ -199,21 +218,7 @@ def arbitrage_opportunities():
             })
     return jsonify(opportunities)
 
-# ✅ 選擇最佳套利路徑
-def find_best_arbitrage():
-    best_path, best_profit = None, 0
-    for path in TRADE_PATHS:
-        profit = calculate_profit(path)
-        if profit > best_profit:
-            best_path, best_profit = path, profit
-    return best_path if best_profit > 0 else None
-
 # ✅ 主循環
-while True:
-    path = find_best_arbitrage()
-    if path:
-        execute_trade(path)
-    time.sleep(5)
-
 if __name__ == '__main__':
+    threading.Thread(target=monitor_price_changes, daemon=True).start()  # 啟動價格變動監控
     app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
