@@ -106,8 +106,23 @@ def on_message(ws, message):
             if current_time - last_logged_time >= 30:  # 每 30 秒記錄一次
                 logging.info(f"📈 {symbol.upper()} 最新價格: {price}")
                 last_logged_time = current_time
+
+            # 價格變動檢測
+            if symbol in last_prices:
+                last_price = last_prices[symbol]
+                price_change = abs(price - last_price) / last_price
+                if price_change >= PRICE_CHANGE_THRESHOLD:
+                    logging.info(f"📉 {symbol.upper()} 價格變動超過 {PRICE_CHANGE_THRESHOLD * 100}%: {last_price} → {price}")
+                    # 可以加入額外條件來觸發套利計算，例如進行套利計算
+                    for path in TRADE_PATHS:
+                        if path[0] == symbol.split('usdt')[0].upper():
+                            logging.info(f"📊 開始執行套利計算: {' → '.join(path)}")
+                            execute_trade(path)
+            last_prices[symbol] = price
         else:
             logging.warning(f"⚠️ 無法解析 WebSocket 數據: {data}")
+    except json.JSONDecodeError:
+        logging.error("⚠️ 收到無法解析的訊息，無法轉換為 JSON 格式")
     except Exception as e:
         logging.error(f"WebSocket 處理錯誤: {str(e)}")
 
@@ -226,9 +241,8 @@ def arbitrage_opportunities():
             })
     return jsonify(opportunities)
 
-if __name__ == '__main__':
-    # 啟動價格變動檢測
+if __name__ == "__main__":
+    # 啟動價格變動監控
     threading.Thread(target=monitor_price_changes, daemon=True).start()
 
-    # 啟動 Flask 服務
-    app.run(host='0.0.0.0', port=8080)
+    app.run(debug=True, host='0.0.0.0', port=5000)
