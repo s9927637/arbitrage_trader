@@ -61,7 +61,9 @@ try:
     # 允許替代交易對
     alternative_pairs = {
         "usdtbnb": "bnbusdt",
-        "usdtbtc": "btcusdt"
+        "usdtbtc": "btcusdt",
+        "usdteth": "ethusdt",  # 新增替代交易對
+        "ethbnb": "bnbeth"  # 更新 ethbnb 為有效交易對名稱
     }
 
     for pair in list(missing_symbols):
