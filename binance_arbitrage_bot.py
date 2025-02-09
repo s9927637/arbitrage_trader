@@ -75,8 +75,9 @@ try:
     # 獲取可用交易對並檢查所需的交易對是否存在
     exchange_info = client.get_exchange_info()
     symbols = [s['symbol'] for s in exchange_info['symbols']]
-    required_symbols = ['USDTBNB', 'USDTBTC', 'BTCUSDT', 'ETHUSDT']
+    logging.info("可用的交易對: %s", symbols)
 
+    required_symbols = ['USDTBNB', 'USDTBTC', 'BTCUSDT', 'ETHUSDT']
     missing_symbols = [symbol for symbol in required_symbols if symbol not in symbols]
     if missing_symbols:
         raise ValueError(f"缺少必要的交易對: {', '.join(missing_symbols)}")
