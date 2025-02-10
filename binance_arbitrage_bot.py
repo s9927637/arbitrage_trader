@@ -14,18 +14,19 @@ from datetime import datetime
 import traceback
 
 # ✅ 常量定義
-INITIAL_CAPITAL = 300  # 初始資金
 TRADE_FEE = 0.00075  # 交易手續費
 SLIPPAGE_TOLERANCE = 0.002  # 滑點容忍度
-MIN_PROFIT_THRESHOLD = 0.01  # 最小利潤閾值
+MIN_PROFIT_THRESHOLD = 0.001  # 最小利潤閾值
 MIN_TRADE_AMOUNT = 10  # 最小交易金額(USDT)
 MAX_TRADE_AMOUNT = 1000  # 最大交易金額(USDT)
+WEBSOCKET_PING_INTERVAL = 30  # WebSocket心跳間隔
+PRICE_CHANGE_THRESHOLD = 0.01  # 價格變動閾值(1%)
 
-# ✅ 高流動性幣的交易路徑設置
+# ✅ 交易路徑設置
 TRADE_PATHS = [
+    ['USDT', 'BNB', 'ETH', 'USDT'],
+    ['USDT', 'BTC', 'BNB', 'USDT'],
     ['USDT', 'BTC', 'ETH', 'USDT'],
-    ['USDT', 'ETH', 'BTC', 'USDT'],
-    ['USDT', 'BNB', 'BTC', 'USDT'],
 ]
 
 # ✅ 初始化日誌處理
@@ -76,7 +77,7 @@ try:
     symbols = [s['symbol'] for s in exchange_info['symbols']]
     logging.info("可用的交易對: %s", symbols)
 
-    required_symbols = ['USDTBTC', 'BTCETH', 'ETHUSDT', 'USDTBNB', 'BNBBTC']
+    required_symbols = ['USDTBNB', 'USDTBTC', 'BTCUSDT', 'ETHUSDT']
     missing_symbols = [symbol for symbol in required_symbols if symbol not in symbols]
     if missing_symbols:
         raise ValueError(f"缺少必要的交易對: {', '.join(missing_symbols)}")
@@ -123,7 +124,7 @@ def on_close(ws, close_status_code, close_msg):
     start_websocket()
 
 def on_open(ws):
-    symbols = ["btcusdt", "ethusdt", "bnbusdt"]
+    symbols = ["bnbusdt", "btcusdt", "ethusdt"]
     payload = {
         "method": "SUBSCRIBE",
         "params": [f"{symbol}@ticker" for symbol in symbols],
@@ -144,7 +145,7 @@ threading.Thread(target=start_websocket, daemon=True).start()
 
 # ✅ 計算套利利潤
 def calculate_profit(path):
-    amount = INITIAL_CAPITAL
+    amount = MIN_TRADE_AMOUNT
     initial_amount = amount
 
     for i in range(len(path) - 1):
